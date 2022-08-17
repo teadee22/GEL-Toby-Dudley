@@ -5,3 +5,4 @@ secrets.tfvars
 app/env/
 app/package
 *.jp*
+*__pycache__*

@@ -27,7 +27,7 @@
                     "arn": "arn:aws:s3: : :gel-bucket-a"
                 },
                 "object": {
-                    "key": "test5.jpg",
+                    "key": "test10.jpg",
                     "size": 220485,
                     "eTag": "afd339016de89dd20b67b457#######",
                     "sequencer": "0062FD48314####"
