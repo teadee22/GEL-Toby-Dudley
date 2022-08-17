@@ -1,0 +1,7 @@
+*.terraform.*
+terraform.tfstate*
+.terraform/
+secrets.tfvars
+app/env/
+app/package
+*.jp*
