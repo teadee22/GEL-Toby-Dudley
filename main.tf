@@ -17,6 +17,10 @@ provider "aws" {
   region  = var.aws_region
 }
 
+#------------------------------------------------------------------------------
+# VPC and Security groups
+#------------------------------------------------------------------------------
+
 module "vpc" {
   source = "terraform-aws-modules/vpc/aws"
 
@@ -27,7 +31,7 @@ module "vpc" {
   private_subnets = ["10.3.0.0/24"]
   public_subnets  = ["10.3.100.0/24"]
 
-  enable_nat_gateway = false
+  enable_nat_gateway = true
 
   tags = {
     Terraform   = "true"
@@ -45,6 +49,30 @@ resource "aws_vpc_endpoint_route_table_association" "s3_private" {
   route_table_id  = module.vpc.vpc_main_route_table_id
   vpc_endpoint_id = aws_vpc_endpoint.s3.id
 }
+
+resource "aws_security_group" "lambda" {
+  name        = "tf_lambda"
+  description = "egress only"
+  vpc_id      = module.vpc.vpc_id
+
+  egress { 
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Terraform   = "true"
+    Environment = "gel"
+  }
+}
+
+
+#------------------------------------------------------------------------------
+# IAM for lambda
+#------------------------------------------------------------------------------
 
 resource "aws_iam_policy" "lambda_networking" {
   name = "tf_networking"
@@ -109,6 +137,36 @@ resource "aws_iam_policy" "lambda_s3_buckets" {
     ]
   })
 }
+resource "aws_iam_policy" "logs" {
+  name = "tf_gel_image_processor_lambda_logs"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Effect   = "Allow"
+        Resource = ["${aws_cloudwatch_log_group.main.arn}"]
+      },
+    ]
+  })
+}
+
+#------------------------------------------------------------------------------
+# Cloudwatch
+#------------------------------------------------------------------------------
+
+resource "aws_cloudwatch_log_group" "main" {
+  name              = "/aws/lambda/${aws_lambda_function.image_processor.function_name}"
+  retention_in_days = 1
+}
+
+#------------------------------------------------------------------------------
+# Lambda resources
+#------------------------------------------------------------------------------
 
 resource "aws_lambda_permission" "allow_bucket" {
   statement_id  = "AllowExecutionFromS3Bucket"
@@ -137,26 +195,9 @@ resource "aws_lambda_function" "image_processor" {
 
 }
 
-resource "aws_security_group" "lambda" {
-  name        = "tf_lambda"
-  description = "egress only"
-  vpc_id      = module.vpc.vpc_id
-
-
-
-  egress { 
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
-  tags = {
-    Terraform   = "true"
-    Environment = "gel"
-  }
-}
+#------------------------------------------------------------------------------
+# S3 buckets
+#------------------------------------------------------------------------------
 
 resource "aws_s3_bucket" "bucket_a" {
   bucket = "gel-bucket-a"
@@ -178,27 +219,3 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
   depends_on = [aws_lambda_permission.allow_bucket]
 }
 
-
-
-resource "aws_iam_policy" "logs" {
-  name = "tf_gel_image_processor_lambda_logs"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Effect   = "Allow"
-        Resource = ["${aws_cloudwatch_log_group.main.arn}"]
-      },
-    ]
-  })
-}
-
-resource "aws_cloudwatch_log_group" "main" {
-  name              = "/aws/lambda/${aws_lambda_function.image_processor.function_name}"
-  retention_in_days = 1
-}
